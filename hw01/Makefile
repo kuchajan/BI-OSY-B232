@@ -5,12 +5,12 @@ CXXFLAGS=-std=c++20 -Wall -pedantic -O2
 SHELL:=/bin/bash
 MACHINE=$(shell uname -m)-$(shell echo $$OSTYPE)
 
-all: test
+all: test.out
 
 deps:
 	g++ -MM *.cpp > Makefile.d
 
-test: solution.o sample_tester.o
+test.out: solution.o sample_tester.o
 	$(LD) $(CXXFLAGS) -o $@ $^ -L./$(MACHINE) -lprogtest_solver -lpthread
 
 %.o: %.cpp
@@ -21,7 +21,7 @@ lib: progtest_solver.o bigint.o
 	$(AR) cfr $(MACHINE)/libprogtest_solver.a $^
 
 clean:
-	rm -f *.o test *~ core sample.tgz Makefile.d
+	rm -f *.o test.out *~ core sample.tgz Makefile.d
 
 pack: clean
 	rm -f sample.tgz
