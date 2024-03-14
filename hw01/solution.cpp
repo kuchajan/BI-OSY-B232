@@ -40,6 +40,64 @@ using namespace std;
 #endif /* __PROGTEST__ */
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
+class CProblemWrap {
+private:
+	bool solved;
+
+public:
+	APolygon polygon;
+	CProblemWrap(const APolygon &pol) : polygon(pol) {
+		solved = false;
+	}
+	void markSolved() {
+		solved = true;
+	}
+	bool isSolved() const {
+		return solved;
+	}
+};
+
+class CPackWrap {
+public:
+	AProblemPack m_pack;
+	vector<shared_ptr<CProblemWrap>> m_cntVec;
+	vector<shared_ptr<CProblemWrap>> m_minVec;
+
+	CPackWrap(const AProblemPack &pack) : m_pack(pack) {
+		for (auto polygon : pack->m_ProblemsCnt) {
+			m_cntVec.emplace_back(make_shared<CProblemWrap>(polygon));
+		}
+		for (auto polygon : pack->m_ProblemsMin) {
+			m_minVec.emplace_back(make_shared<CProblemWrap>(polygon));
+		}
+	}
+	bool isSolved() const {
+		for (auto problem : m_cntVec) {
+			if (!problem->isSolved()) {
+				return false;
+			}
+		}
+		for (auto problem : m_cntVec) {
+			if (!problem->isSolved()) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+class CCompanyWrap {
+public:
+	ACompany m_company;
+	queue<shared_ptr<CPackWrap>> m_outputQueue;
+	mutex m_qMut;
+	bool m_running;
+
+	CCompanyWrap(const ACompany &company) : m_company(company) {
+		m_running = true;
+	}
+};
+
 class COptimizer {
 public:
 	static bool usingProgtestSolver(void) {
