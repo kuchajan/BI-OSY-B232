@@ -99,6 +99,33 @@ public:
 };
 
 class COptimizer {
+private:
+	queue<shared_ptr<CProblemWrap>> m_CntQueue;
+	mutex m_CntQueueMut;
+	queue<shared_ptr<CProblemWrap>> m_MinQueue;
+	mutex m_MinQueueMut;
+
+	vector<shared_ptr<CCompanyWrap>> m_Companies;
+	vector<thread> m_workerThreads;
+	vector<thread> m_commThreads;
+
+	void inputFunc(shared_ptr<CCompanyWrap> company) {
+		
+	}
+
+	void outputFunc(shared_ptr<CCompanyWrap> company) {
+		
+	}
+
+	void workerFunc() {
+		// wait until at least one queue is non-empty
+		// chose which problem to solve
+		// get all the polygons from problem queue
+		// fill solver until full or something idk
+		// solve
+		// end loop if marked for end
+	}
+
 public:
 	static bool usingProgtestSolver(void) {
 		return true;
