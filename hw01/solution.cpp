@@ -136,13 +136,27 @@ public:
 	static void checkAlgorithmCnt(APolygon p) {
 		// dummy implementation if usingProgtestSolver() returns true
 	}
-	void start(int threadCount);
-	void stop(void);
-	void addCompany(ACompany company);
-
-private:
+	void addCompany(ACompany company) {
+		m_Companies.emplace_back(make_shared<CCompanyWrap>(company));
+	}
+	void start(int threadCount) {
+		for (auto &company : m_Companies) {
+			m_commThreads.emplace_back(&COptimizer::inputFunc, this, company);
+			m_commThreads.emplace_back(&COptimizer::outputFunc, this, company);
+		}
+		for (int i = 0; i < threadCount; ++i) {
+			m_workerThreads.emplace_back(&COptimizer::workerFunc, this);
+		}
+	}
+	void stop(void) {
+		for (auto &comm : m_commThreads) {
+			comm.join();
+		}
+		for (auto &worker : m_workerThreads) {
+			worker.join();
+		}
+	}
 };
-// TODO: COptimizer implementation goes here
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 #ifndef __PROGTEST__
 int main(void) {
