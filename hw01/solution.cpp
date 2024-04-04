@@ -136,8 +136,48 @@ private:
 	vector<thread> m_outputThreads;
 	vector<thread> m_workerThreads;
 
+	void addProblemCnt(const shared_ptr<CProblemWrap> &toSolve) {
+		lock_guard guard(m_CntSolverMut);
+		m_CntSolver->m_solver->addPolygon(toSolve->polygon); // todo: make more safe
+		m_CntSolver->m_solving.push_back(toSolve);
+		if (!m_CntSolver->m_solver->hasFreeCapacity()) {
+			lock_guard guard2(m_SolverQueueMut);
+			m_SolverQueue.push(m_CntSolver);
+			m_CntSolver = make_shared<CSolverWrap>(createProgtestCntSolver());
+			sem_post(&m_SolverSem);
+		}
+	}
+
+	void addProblemMin(const shared_ptr<CProblemWrap> &toSolve) {
+		lock_guard guard(m_MinSolverMut);
+		m_MinSolver->m_solver->addPolygon(toSolve->polygon); // todo: make more safe
+		m_MinSolver->m_solving.push_back(toSolve);
+		if (!m_MinSolver->m_solver->hasFreeCapacity()) {
+			lock_guard guard2(m_SolverQueueMut);
+			m_SolverQueue.push(m_MinSolver);
+			m_MinSolver = make_shared<CSolverWrap>(createProgtestMinSolver());
+			sem_post(&m_SolverSem);
+		}
+	}
+
 	void inputFunc(shared_ptr<CCompanyWrap> company) {
-		
+		AProblemPack pack;
+		while ((bool)(pack = company->m_company->waitForPack())) {
+			// todo: add wait if queues are too full?
+			shared_ptr<CPackWrap> packWrap = make_shared<CPackWrap>(pack);
+			for (auto &cntProblem : packWrap->m_cntVec) {
+				addProblemCnt(cntProblem);
+			}
+			for (auto &minProblem : packWrap->m_minVec) {
+				addProblemMin(minProblem);
+			}
+			{
+				lock_guard guard(company->m_qMut);
+				company->m_outputQueue.push(packWrap);
+			}
+			sem_post(&company->m_sem);
+		}
+		sem_post(&company->m_sem);
 	}
 
 	void outputFunc(shared_ptr<CCompanyWrap> company) {
