@@ -110,10 +110,16 @@ public:
 
 class COptimizer {
 private:
-	queue<shared_ptr<CProblemWrap>> m_CntQueue;
-	mutex m_CntQueueMut;
-	queue<shared_ptr<CProblemWrap>> m_MinQueue;
-	mutex m_MinQueueMut;
+	int m_threadCount;
+
+	queue<shared_ptr<CSolverWrap>> m_SolverQueue;
+	sem_t m_SolverSem;
+	mutex m_SolverQueueMut;
+
+	shared_ptr<CSolverWrap> m_CntSolver;
+	mutex m_CntSolverMut;
+	shared_ptr<CSolverWrap> m_MinSolver;
+	mutex m_MinSolverMut;
 
 	vector<shared_ptr<CCompanyWrap>> m_Companies;
 	vector<thread> m_inputThreads;
