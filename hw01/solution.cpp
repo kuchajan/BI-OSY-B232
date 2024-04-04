@@ -111,6 +111,13 @@ public:
 	}
 };
 
+class CSolverWrap {
+public:
+	AProgtestSolver m_solver;
+	vector<shared_ptr<CProblemWrap>> m_solving;
+	CSolverWrap(const AProgtestSolver &solver) : m_solver(solver) {}
+};
+
 class COptimizer {
 private:
 	int m_threadCount;
