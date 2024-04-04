@@ -249,21 +249,31 @@ public:
 		m_Companies.emplace_back(make_shared<CCompanyWrap>(company));
 	}
 	void start(int threadCount) {
+		// Init
+		m_threadCount = threadCount;
+		m_CntSolver = make_shared<CSolverWrap>(createProgtestCntSolver());
+		m_MinSolver = make_shared<CSolverWrap>(createProgtestMinSolver());
+		sem_init(&m_SolverSem, 0, 0);
+		// add threads
 		for (auto &company : m_Companies) {
-			m_commThreads.emplace_back(&COptimizer::inputFunc, this, company);
-			m_commThreads.emplace_back(&COptimizer::outputFunc, this, company);
+			m_inputThreads.emplace_back(&COptimizer::inputFunc, this, company);
+			m_outputThreads.emplace_back(&COptimizer::outputFunc, this, company);
 		}
 		for (int i = 0; i < threadCount; ++i) {
 			m_workerThreads.emplace_back(&COptimizer::workerFunc, this);
 		}
 	}
 	void stop(void) {
-		for (auto &comm : m_commThreads) {
-			comm.join();
+		for (auto &input : m_inputThreads) {
+			input.join();
 		}
 		for (auto &worker : m_workerThreads) {
 			worker.join();
 		}
+		for (auto &output : m_outputThreads) {
+			output.join();
+		}
+		sem_destroy(&m_SolverSem);
 	}
 };
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
