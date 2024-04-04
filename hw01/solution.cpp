@@ -116,8 +116,9 @@ private:
 	mutex m_MinQueueMut;
 
 	vector<shared_ptr<CCompanyWrap>> m_Companies;
+	vector<thread> m_inputThreads;
+	vector<thread> m_outputThreads;
 	vector<thread> m_workerThreads;
-	vector<thread> m_commThreads;
 
 	void inputFunc(shared_ptr<CCompanyWrap> company) {
 		
