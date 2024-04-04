@@ -203,6 +203,27 @@ private:
 		}
 	}
 
+	void workerFunc() {
+		while (true) {
+			// get solver from queue
+			sem_wait(&m_SolverSem);
+			shared_ptr<CSolverWrap> solver;
+			{
+				lock_guard guard(m_SolverQueueMut);
+				if (m_SolverQueue.empty()) {
+					break;
+				}
+				solver = m_SolverQueue.front();
+				m_SolverQueue.pop();
+			}
+			// solve it
+			solver->m_solver->solve();
+			// mark elements as solved
+			for (auto &pol : solver->m_solving) {
+				pol->markSolved();
+			}
+			// todo: notify output thread if pack solved?
+		}
 	}
 
 	void workerFunc() {
