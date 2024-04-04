@@ -181,7 +181,28 @@ private:
 	}
 
 	void outputFunc(shared_ptr<CCompanyWrap> company) {
-		
+		while (true) {
+			sem_wait(&company->m_sem);
+			if (company->m_outputQueue.empty()) {
+				break;
+			}
+			shared_ptr<CPackWrap> pack(nullptr);
+			{
+				lock_guard guard(company->m_qMut);
+				pack = company->m_outputQueue.front();
+			}
+			{
+				unique_lock guard(pack->m_mut);
+				pack->m_cond.wait(guard, [&pack]() { return pack->isSolved(); });
+			}
+			{
+				lock_guard guard(company->m_qMut);
+				company->m_company->solvedPack(pack->m_pack);
+				company->m_outputQueue.pop();
+			}
+		}
+	}
+
 	}
 
 	void workerFunc() {
