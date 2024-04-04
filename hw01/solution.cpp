@@ -282,13 +282,20 @@ public:
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 #ifndef __PROGTEST__
 int main(void) {
-	COptimizer optimizer;
-	ACompanyTest company = std::make_shared<CCompanyTest>();
-	optimizer.addCompany(company);
-	optimizer.start(4);
-	optimizer.stop();
-	if (!company->allProcessed())
-		throw std::logic_error("(some) problems were not correctly processsed");
+	for (int j = 0; j < 100; ++j) {
+		COptimizer optimizer;
+		vector<ACompanyTest> companies;
+		for (int i = 0; i < 1; ++i)
+			companies.emplace_back(make_shared<CCompanyTest>());
+		optimizer.addCompany(companies.back());
+
+		optimizer.start(4);
+		optimizer.stop();
+		for (auto &company : companies) {
+			if (!company->allProcessed())
+				throw std::logic_error("(some) problems were not correctly processsed");
+		}
+	}
 	return 0;
 }
 #endif /* __PROGTEST__ */
