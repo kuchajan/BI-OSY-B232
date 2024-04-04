@@ -101,10 +101,13 @@ public:
 	ACompany m_company;
 	queue<shared_ptr<CPackWrap>> m_outputQueue;
 	mutex m_qMut;
-	bool m_running;
+	sem_t m_sem;
 
 	CCompanyWrap(const ACompany &company) : m_company(company) {
-		m_running = true;
+		sem_init(&m_sem, 0, 0);
+	}
+	~CCompanyWrap() {
+		sem_destroy(&m_sem);
 	}
 };
 
