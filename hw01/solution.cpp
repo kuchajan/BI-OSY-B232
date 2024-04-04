@@ -226,13 +226,15 @@ private:
 		}
 	}
 
-	void workerFunc() {
-		// wait until at least one queue is non-empty
-		// chose which problem to solve
-		// get all the polygons from problem queue
-		// fill solver until full or something idk
-		// solve
-		// end loop if marked for end
+	void forceSolve() {
+		{
+			lock_guard guard2(m_SolverQueueMut);
+			m_SolverQueue.push(m_MinSolver);
+			m_SolverQueue.push(m_CntSolver);
+		}
+		for (int i = 0; i < m_threadCount + 2; ++i) {
+			sem_post(&m_SolverSem);
+		}
 	}
 
 public:
@@ -267,6 +269,7 @@ public:
 		for (auto &input : m_inputThreads) {
 			input.join();
 		}
+		forceSolve();
 		for (auto &worker : m_workerThreads) {
 			worker.join();
 		}
