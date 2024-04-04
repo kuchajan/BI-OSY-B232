@@ -40,22 +40,7 @@ using namespace std;
 #endif /* __PROGTEST__ */
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
-class CProblemWrap {
-private:
-	bool solved;
-
-public:
-	APolygon polygon;
-	CProblemWrap(const APolygon &pol) : polygon(pol) {
-		solved = false;
-	}
-	void markSolved() {
-		solved = true;
-	}
-	bool isSolved() const {
-		return solved;
-	}
-};
+class CProblemWrap;
 
 class CPackWrap {
 public:
@@ -63,26 +48,51 @@ public:
 	vector<shared_ptr<CProblemWrap>> m_cntVec;
 	vector<shared_ptr<CProblemWrap>> m_minVec;
 
+	mutex m_mut;
+	condition_variable m_cond;
+	size_t m_ToSolve;
+
 	CPackWrap(const AProblemPack &pack) : m_pack(pack) {
 		for (auto polygon : pack->m_ProblemsCnt) {
-			m_cntVec.emplace_back(make_shared<CProblemWrap>(polygon));
+			m_cntVec.emplace_back(make_shared<CProblemWrap>(polygon, this));
 		}
 		for (auto polygon : pack->m_ProblemsMin) {
-			m_minVec.emplace_back(make_shared<CProblemWrap>(polygon));
+			m_minVec.emplace_back(make_shared<CProblemWrap>(polygon, this));
+		}
+		m_ToSolve = m_cntVec.size() + m_minVec.size();
+	}
+
+	bool isSolved() {
+		return m_ToSolve == 0;
+	}
+
+	void markSolved() {
+		lock_guard guard(m_mut);
+		if (m_ToSolve == 0) {
+			throw logic_error("Can't mark solved more than there is"); // todo: if good, remove
+		}
+
+		--m_ToSolve;
+		if (m_ToSolve == 0) {
+			m_cond.notify_all();
 		}
 	}
-	bool isSolved() const {
-		for (auto problem : m_cntVec) {
-			if (!problem->isSolved()) {
-				return false;
-			}
-		}
-		for (auto problem : m_cntVec) {
-			if (!problem->isSolved()) {
-				return false;
-			}
-		}
-		return true;
+};
+
+class CProblemWrap {
+private:
+	CPackWrap *m_parent;
+	size_t m_mark;
+
+public:
+	APolygon polygon;
+	CProblemWrap(const APolygon &pol, CPackWrap *parent) : polygon(pol) {
+		m_parent = parent;
+		m_mark = 0;
+	}
+	void markSolved() {
+		++m_mark;
+		m_parent->markSolved();
 	}
 };
 
