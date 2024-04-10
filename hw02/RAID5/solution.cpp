@@ -28,7 +28,40 @@ struct TBlkDev {
 
 class CRaidVolume {
 protected:
-	// todo
+	TBlkDev m_dev;
+
+	/**
+	 * @brief: Reads data from a sector of a device, no matter if it's overhead or parity
+	 * @note: buffer has to be provided
+	 */
+	bool readSector(int dev, int row, uint8_t *buf, unsigned int length = 1) {
+		return m_dev.m_Read(dev, row, buf, length) == length * SECTOR_SIZE;
+	}
+	/**
+	 * @brief: Writes data from buffer to a sector of a device, no matter if it's overhead or parity
+	 * @note: buffer has to be provided
+	 */
+	bool writeSector(int dev, int row, const uint8_t *buf, unsigned int length = 1) {
+		return m_dev.m_Write(dev, row, buf, length) == length * SECTOR_SIZE;
+	}
+
+	int getRow(int sector) const {
+		return sector / (m_dev.m_Devices - 1);
+	}
+
+	int getParityDevByRow(int row) const {
+		return row % m_dev.m_Devices;
+	}
+
+	int getParityDevBySector(int sector) const {
+		return getParityDevByRow(getRow(sector));
+	}
+
+	int getDevice(int sector) const {
+		int device = sector % (m_dev.m_Devices - 1);
+		return device >= getParityDevBySector(sector) ? device + 1 : device;
+	}
+
 public:
 	static bool create(const TBlkDev &dev);
 	int start(const TBlkDev &dev);
