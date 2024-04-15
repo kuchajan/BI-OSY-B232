@@ -241,8 +241,23 @@ public:
 	}
 
 	int resync();
-	int status() const;
-	int size() const;
+
+	/**
+	 * @return: The current status of the RAID device
+	 */
+	int status() const {
+		return m_RAIDStatus;
+	}
+
+	/**
+	 * @return: The ammount of sectors available to tester
+	 */
+	int size() const {
+		// m_dev.m_Sectors - 1: all sectors of singular device, except one for overhead
+		// m_dev.m_Devices - 1: all devices, except one for parity
+		return m_hasDev && (m_RAIDStatus == RAID_OK || m_RAIDStatus == RAID_DEGRADED) ? (m_dev.m_Sectors - 1) * (m_dev.m_Devices - 1) : 0;
+	}
+
 	bool read(int secNr, void *data, int secCnt);
 	bool write(int secNr, const void *data, int secCnt);
 };
