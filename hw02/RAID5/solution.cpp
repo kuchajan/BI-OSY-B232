@@ -21,14 +21,56 @@ constexpr int RAID_FAILED = 3;
 struct TBlkDev {
 	int m_Devices;
 	int m_Sectors;
+	// int device, int sectorNr, void *data, int sectorCnt
 	int (*m_Read)(int, int, void *, int);
+	// int device, int sectorNr, const void *data, int sectorCnt
 	int (*m_Write)(int, int, const void *, int);
 };
 #endif /* __PROGTEST__ */
 
+class CStatus {
+private:
+	uint16_t m_status;
+
+public:
+	CStatus(uint16_t status = 0) : m_status(status) {}
+	bool getStatus(int dev) const {
+		return ((m_status >> dev) & 0b1);
+	}
+	void setStatus(int dev, bool bit) {
+		if (bit)
+			m_status |= (0b1 << dev);
+		else
+			m_status &= !(0b1 << dev);
+	}
+	bool operator==(const CStatus &other) const {
+		return m_status == other.m_status;
+	}
+	bool operator!=(const CStatus &other) const {
+		return m_status != other.m_status;
+	}
+};
+
+struct SOverhead {
+	size_t m_version;
+	CStatus m_status;
+	SOverhead(size_t version = 0, int diskCount = 0) : m_version(version), m_status(0xffff >> (16 - diskCount)) {}
+	SOverhead(size_t version, const CStatus &status) : m_version(version), m_status(status) {}
+
+	bool operator==(const SOverhead &other) const {
+		return m_version == other.m_version && m_status == other.m_status;
+	}
+	bool operator!=(const SOverhead &other) const {
+		return m_version != other.m_version || m_status != other.m_status;
+	}
+};
+
 class CRaidVolume {
 protected:
 	TBlkDev m_dev;
+	bool m_hasDev;
+	SOverhead m_overhead;
+	int m_RAIDStatus;
 
 	/**
 	 * @brief: Reads data from a sector of a device, no matter if it's overhead or parity
@@ -62,10 +104,142 @@ protected:
 		return device >= getParityDevBySector(sector) ? device + 1 : device;
 	}
 
+	bool getOverhead(int dev, SOverhead &overhead) {
+		uint8_t buf[SECTOR_SIZE];
+		bool result = readSector(dev, m_dev.m_Sectors - 1, buf);
+		if (!result)
+			return false;
+		memcpy(&overhead, buf, sizeof(SOverhead));
+		return true;
+	}
+	bool setOverhead(int dev) {
+		uint8_t buf[SECTOR_SIZE];
+		memcpy(buf, &m_overhead, sizeof(SOverhead));
+		return writeSector(dev, m_dev.m_Sectors - 1, buf);
+	}
+
 public:
-	static bool create(const TBlkDev &dev);
-	int start(const TBlkDev &dev);
-	int stop();
+	/**
+	 * @brief: Writes initialization data to a potential RAID device
+	 * @returns: True when the device is valid and was successfully created
+	 */
+	static bool create(const TBlkDev &dev) {
+		// Check disk count
+		if (dev.m_Devices < 3 || dev.m_Devices > MAX_RAID_DEVICES)
+			return false;
+		// Check if overhead can fit
+		if (sizeof(SOverhead) > SECTOR_SIZE)
+			return false;
+
+		uint8_t buf[SECTOR_SIZE];
+		{
+			SOverhead overhead(1, 0xffff >> (MAX_RAID_DEVICES - dev.m_Devices));
+			memcpy(buf, &overhead, sizeof(SOverhead));
+		}
+
+		bool err = false;
+
+		for (int disk = 0; disk < dev.m_Devices; ++disk)
+			if (dev.m_Write(disk, dev.m_Sectors - 1, buf, 1) != 1)
+				err = true; // even though I know an error occured, I still want to initialize rest of the devices, just in case
+
+		return !err;
+	}
+
+	CRaidVolume() : m_overhead() {
+		m_RAIDStatus = RAID_STOPPED;
+
+		m_hasDev = false;
+		m_dev.m_Devices = 0;
+		m_dev.m_Read = nullptr;
+		m_dev.m_Sectors = 0;
+		m_dev.m_Write = nullptr;
+	}
+
+	/**
+	 * @brief: Initializes a created or a stopped RAID
+	 * @returns: The status of the started RAID device
+	 */
+	int start(const TBlkDev &dev) {
+		if (m_RAIDStatus != RAID_STOPPED)
+			return m_RAIDStatus;
+		m_dev = TBlkDev(dev);
+		m_hasDev = true;
+
+		// get the status of the device
+		int fail = 0;
+		m_overhead = SOverhead(0, m_dev.m_Devices);
+		for (int disk = 0; disk < m_dev.m_Devices; ++disk) {
+			SOverhead loaded;
+			if (!m_overhead.m_status.getStatus(disk) || !getOverhead(disk, loaded) || loaded.m_version == 0 || loaded.m_version < m_overhead.m_version) {
+				m_overhead.m_status.setStatus(disk, false);
+				++fail;
+				continue;
+			}
+			if (loaded.m_version > m_overhead.m_version) {
+				// trust this overhead
+				m_overhead = loaded;
+				// set previous disks as failed - so don't trust
+				for (int prevDisk = 0; prevDisk < disk; ++prevDisk)
+					m_overhead.m_status.setStatus(prevDisk, false);
+				// calculate current count of successes and fails
+				fail = disk; // because disks from 0 to disk is failed
+				continue;
+			}
+			// success
+		}
+
+		// update version
+		++m_overhead.m_version;
+		{ // over-complicated for-like while loop which resets on fail, you love to see it
+			int disk = 0;
+			while (disk < m_dev.m_Devices) {
+				if (m_overhead.m_status.getStatus(disk)) {
+					if (!setOverhead(disk)) {
+						// I am so tired
+						m_overhead.m_status.setStatus(disk, false);
+						++m_overhead.m_version;
+						++fail;
+						// start loop again
+						disk = 0;
+						continue;
+					}
+				}
+				++disk;
+			}
+		}
+
+		if (fail == 0)
+			m_RAIDStatus = RAID_OK;
+		else if (fail == 1)
+			m_RAIDStatus = RAID_DEGRADED;
+		else
+			m_RAIDStatus = RAID_FAILED;
+
+		return m_RAIDStatus;
+	}
+
+	/**
+	 * @brief: Stops a RAID device and writes overhead information to valid disks
+	 * @returns: RAID_STOPPED
+	 */
+	int stop() {
+		if (m_RAIDStatus == RAID_STOPPED)
+			return RAID_STOPPED;
+		++m_overhead.m_version;
+		for (int disk = 0; disk < m_dev.m_Devices; ++disk) {
+			if (m_overhead.m_status.getStatus(disk)) {
+				if (!setOverhead(disk)) {
+					// update overhead and start over
+					m_overhead.m_status.setStatus(disk, false);
+					return stop(); // ? potential point of optimalization: maybe reset for loop instead of recursion
+				}
+			}
+		}
+		m_RAIDStatus = RAID_STOPPED;
+		return RAID_STOPPED;
+	}
+
 	int resync();
 	int status() const;
 	int size() const;
