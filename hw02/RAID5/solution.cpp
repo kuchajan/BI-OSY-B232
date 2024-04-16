@@ -118,6 +118,34 @@ protected:
 		return writeSector(dev, m_dev.m_Sectors - 1, buf);
 	}
 
+	bool calculateParity(uint8_t *buf, int row, int skipDev = -1) {
+		if (skipDev == -1)
+			skipDev = getParityDevByRow(row);
+		if ((m_RAIDStatus == RAID_DEGRADED && m_overhead.m_status.getStatus(skipDev) == true) || (m_RAIDStatus == RAID_FAILED))
+			return false;
+		uint8_t tmpBuf[SECTOR_SIZE];
+		bool first = true;
+		for (int disk = 0; disk < m_dev.m_Devices; ++disk) {
+			if (disk == skipDev)
+				continue;
+			if (first) {
+				first = false;
+				if (!readSector(disk, row, buf)) {
+					failDisk(disk);
+					return false;
+				}
+			} else {
+				if (!readSector(disk, row, tmpBuf)) {
+					failDisk(disk);
+					return false;
+				}
+				for (int byte = 0; byte < SECTOR_SIZE; ++byte)
+					buf[byte] ^= tmpBuf[byte];
+			}
+		}
+		return true;
+	}
+
 public:
 	/**
 	 * @brief: Writes initialization data to a potential RAID device
