@@ -72,6 +72,11 @@ protected:
 	SOverhead m_overhead;
 	int m_RAIDStatus;
 
+	void markFailDisk(int disk) {
+		m_overhead.m_status.setStatus(disk, false);
+		m_RAIDStatus = m_RAIDStatus == RAID_OK ? RAID_DEGRADED : RAID_FAILED;
+	}
+
 	/**
 	 * @brief: Reads data from a sector of a device, no matter if it's overhead or parity
 	 * @note: buffer has to be provided
@@ -131,12 +136,12 @@ protected:
 			if (first) {
 				first = false;
 				if (!readSector(disk, row, buf)) {
-					failDisk(disk);
+					markFailDisk(disk);
 					return false;
 				}
 			} else {
 				if (!readSector(disk, row, tmpBuf)) {
-					failDisk(disk);
+					markFailDisk(disk);
 					return false;
 				}
 				for (int byte = 0; byte < SECTOR_SIZE; ++byte)
