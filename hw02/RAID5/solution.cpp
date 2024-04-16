@@ -153,6 +153,36 @@ protected:
 		return true;
 	}
 
+	bool updateParityDegraded(int failDisk, int row, const uint8_t *data) {
+		int parityDisk = getParityDevByRow(row);
+		if (!m_overhead.m_status.getStatus(parityDisk))
+			return false;
+		uint8_t buf[SECTOR_SIZE];
+		if (!calculateParity(buf, row, parityDisk, failDisk, data)) {
+			return false;
+		}
+		if (!writeSector(parityDisk, row, buf)) {
+			markFailDisk(parityDisk);
+			return false;
+		}
+		return true;
+	}
+
+	bool updateParity(int row) {
+		int parityDisk = getParityDevByRow(row);
+		if (!m_overhead.m_status.getStatus(parityDisk))
+			return false;
+		uint8_t buf[SECTOR_SIZE];
+		if (!calculateParity(buf, row, parityDisk))
+			return true; //?
+		if (!writeSector(parityDisk, row, buf)) {
+			markFailDisk(parityDisk);
+			return false;
+		}
+
+		return true;
+	}
+
 public:
 	/**
 	 * @brief: Writes initialization data to a potential RAID device
