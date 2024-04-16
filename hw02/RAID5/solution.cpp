@@ -275,7 +275,35 @@ public:
 		return RAID_STOPPED;
 	}
 
-	int resync();
+	int resync() {
+		if (m_RAIDStatus != RAID_DEGRADED)
+			return m_RAIDStatus;
+
+		int toRecover = -1;
+		for (int disk = 0; disk < m_dev.m_Devices; ++disk)
+			if (!m_overhead.m_status.getStatus(disk)) {
+				toRecover = disk;
+				break;
+			}
+		if (toRecover == -1)
+			throw logic_error("RAID says degraded, but all disks are ok, which is not possible");
+
+		for (int row = 0; row < m_dev.m_Sectors - 1; ++row) {
+			uint8_t buf[SECTOR_SIZE];
+			if (!calculateParity(buf, row, toRecover)) {
+				// calculateParity already uses markFailDisk
+				return RAID_FAILED;
+			}
+			if (!writeSector(toRecover, row, buf)) {
+				markFailDisk(toRecover);
+				return RAID_DEGRADED;
+			}
+		}
+
+		m_overhead.m_status.setStatus(toRecover, true);
+		m_RAIDStatus = RAID_OK;
+		return RAID_OK;
+	}
 
 	/**
 	 * @return: The current status of the RAID device
