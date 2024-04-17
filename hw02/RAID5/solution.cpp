@@ -263,6 +263,8 @@ public:
 		}
 
 		// update version
+		// ? why do I want to do that?
+		/*
 		++m_overhead.m_version;
 		{ // over-complicated for-like while loop which resets on fail, you love to see it
 			int disk = 0;
@@ -281,6 +283,7 @@ public:
 				++disk;
 			}
 		}
+		*/
 
 		if (fail == 0)
 			m_RAIDStatus = RAID_OK;
