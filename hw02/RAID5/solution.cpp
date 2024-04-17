@@ -206,7 +206,7 @@ public:
 
 		uint8_t buf[SECTOR_SIZE];
 		{
-			SOverhead overhead(1, 0xffff >> (MAX_RAID_DEVICES - dev.m_Devices));
+			SOverhead overhead(1, dev.m_Devices);
 			memcpy(buf, &overhead, sizeof(SOverhead));
 		}
 
