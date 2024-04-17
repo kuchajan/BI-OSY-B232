@@ -351,8 +351,55 @@ public:
 		return m_hasDev && (m_RAIDStatus == RAID_OK || m_RAIDStatus == RAID_DEGRADED) ? (m_dev.m_Sectors - 1) * (m_dev.m_Devices - 1) : 0;
 	}
 
-	bool read(int secNr, void *data, int secCnt);
-	bool write(int secNr, const void *data, int secCnt);
+	bool read(int secNr, void *data, int secCnt) {
+		if (m_RAIDStatus != RAID_OK && m_RAIDStatus != RAID_DEGRADED)
+			return false;
+		for (int secD = 0; secD < secCnt; ++secD) {
+			int disk = getDevice(secNr + secD);
+			int row = getRow(secNr + secD);
+			if (m_overhead.m_status.getStatus(disk)) {
+				// device is readable, read data directly
+				if (!readSector(disk, row, (uint8_t *)data + (secD * SECTOR_SIZE))) {
+					// device failed now
+					markFailDisk(disk);
+					if (m_RAIDStatus == RAID_FAILED || !calculateParity((uint8_t *)data + (secD * SECTOR_SIZE), row, disk)) // inverse op of xor is xor, recover data that way
+						return false;
+				}
+			} else {
+				if (!calculateParity((uint8_t *)data + (secD * SECTOR_SIZE), row, disk)) // attempt data recovery
+					return false;
+			}
+		}
+		return true;
+	}
+
+	bool write(int secNr, const void *data, int secCnt) {
+		if (m_RAIDStatus != RAID_OK && m_RAIDStatus != RAID_DEGRADED)
+			return false;
+
+		for (int secD = 0; secD < secCnt; ++secD) {
+			int disk = getDevice(secNr + secD);
+			int row = getRow(secNr + secD);
+			if (m_overhead.m_status.getStatus(disk)) {
+				// device is writable, write data directly
+				if (!writeSector(disk, row, (const uint8_t *)data + (secD * SECTOR_SIZE))) {
+					// device failed now
+					markFailDisk(disk);
+					if (m_RAIDStatus == RAID_FAILED) // no recovery from this
+						return false;
+					if (!updateParityDegraded(disk, row, (const uint8_t *)data + (secD * SECTOR_SIZE))) // todo: fix wrong handling?
+						return false;
+				} else {
+					if (m_overhead.m_status.getStatus(getParityDevByRow(row)))
+						updateParity(row);
+				}
+			} else {
+				if (!updateParityDegraded(disk, row, (const uint8_t *)data + (secD * SECTOR_SIZE))) // todo: fix wrong handling?
+					return false;
+			}
+		}
+		return true;
+	}
 };
 
 #ifndef __PROGTEST__
