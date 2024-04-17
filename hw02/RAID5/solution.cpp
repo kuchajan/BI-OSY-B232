@@ -154,15 +154,11 @@ protected:
 				continue;
 			if (first) {
 				first = false;
-				if (!readSector(disk, row, buf)) {
-					markFailDisk(disk);
+				if (!readSector(disk, row, buf))
 					return false;
-				}
 			} else {
-				if (!readSector(disk, row, tmpBuf)) {
-					markFailDisk(disk);
+				if (!readSector(disk, row, tmpBuf))
 					return false;
-				}
 				XORSector(buf, tmpBuf);
 			}
 		}
