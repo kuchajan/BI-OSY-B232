@@ -78,8 +78,10 @@ protected:
 	int m_RAIDStatus;
 
 	void markFailDisk(int disk) {
-		m_overhead.m_status.setStatus(disk, false);
-		m_RAIDStatus = m_RAIDStatus == RAID_OK ? RAID_DEGRADED : RAID_FAILED;
+		if (m_overhead.m_status.getStatus(disk)) {
+			m_overhead.m_status.setStatus(disk, false);
+			m_RAIDStatus = m_RAIDStatus == RAID_OK ? RAID_DEGRADED : RAID_FAILED;
+		}
 	}
 
 	/**
