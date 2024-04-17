@@ -81,15 +81,23 @@ protected:
 	 * @brief: Reads data from a sector of a device, no matter if it's overhead or parity
 	 * @note: buffer has to be provided
 	 */
-	bool readSector(int dev, int row, uint8_t *buf, unsigned int length = 1) {
-		return m_dev.m_Read(dev, row, buf, length) == length * SECTOR_SIZE;
+	bool readSector(int dev, int row, uint8_t *buf, int length = 1) {
+		if (!m_overhead.m_status.getStatus(dev))
+			return false;
+		bool toRet = m_dev.m_Read(dev, row, buf, length) == length * SECTOR_SIZE;
+		m_overhead.m_status.setStatus(dev, toRet);
+		return toRet;
 	}
 	/**
 	 * @brief: Writes data from buffer to a sector of a device, no matter if it's overhead or parity
 	 * @note: buffer has to be provided
 	 */
-	bool writeSector(int dev, int row, const uint8_t *buf, unsigned int length = 1) {
-		return m_dev.m_Write(dev, row, buf, length) == length * SECTOR_SIZE;
+	bool writeSector(int dev, int row, const uint8_t *buf, int length = 1) {
+		if (!m_overhead.m_status.getStatus(dev))
+			return false;
+		bool toRet = m_dev.m_Write(dev, row, buf, length) == length * SECTOR_SIZE;
+		m_overhead.m_status.setStatus(dev, toRet);
+		return toRet;
 	}
 
 	int getRow(int sector) const {
