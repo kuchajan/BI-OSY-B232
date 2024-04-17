@@ -165,34 +165,21 @@ protected:
 		return true;
 	}
 
-	bool updateParityDegraded(int failDisk, int row, const uint8_t *data) {
-		int parityDisk = getParityDevByRow(row);
-		if (!m_overhead.m_status.getStatus(parityDisk))
+	bool writeRAID_OK(int disk, int row, int parityDisk, const uint8_t *data) {
+		uint8_t newParity[SECTOR_SIZE];
+		if (!readSector(parityDisk, row, newParity))
 			return false;
 		uint8_t buf[SECTOR_SIZE];
-		if (!calculateParity(buf, row, parityDisk, failDisk, data)) {
+		if (!readSector(disk, row, buf))
 			return false;
-		}
-		if (!writeSector(parityDisk, row, buf)) {
-			markFailDisk(parityDisk);
-			return false;
-		}
-		return true;
-	}
 
-	bool updateParity(int row) {
-		int parityDisk = getParityDevByRow(row);
-		if (!m_overhead.m_status.getStatus(parityDisk))
-			return false;
-		uint8_t buf[SECTOR_SIZE];
-		if (!calculateParity(buf, row, parityDisk))
-			return true; //?
-		if (!writeSector(parityDisk, row, buf)) {
-			markFailDisk(parityDisk);
-			return false;
-		}
+		XORSector(newParity, buf);
+		XORSector(newParity, data);
 
-		return true;
+		if (!writeSector(disk, row, data))
+			return false;
+
+		return writeSector(parityDisk, row, newParity);
 	}
 
 public:
@@ -397,23 +384,34 @@ public:
 		for (int secD = 0; secD < secCnt; ++secD) {
 			int disk = getDevice(secNr + secD);
 			int row = getRow(secNr + secD);
-			if (m_overhead.m_status.getStatus(disk)) {
-				// device is writable, write data directly
-				if (!writeSector(disk, row, (const uint8_t *)data + (secD * SECTOR_SIZE))) {
-					// device failed now
-					markFailDisk(disk);
-					if (m_RAIDStatus == RAID_FAILED) // no recovery from this
-						return false;
-					if (!updateParityDegraded(disk, row, (const uint8_t *)data + (secD * SECTOR_SIZE))) // todo: fix wrong handling?
-						return false;
-				} else {
-					if (m_overhead.m_status.getStatus(getParityDevByRow(row)))
-						updateParity(row);
-				}
-			} else {
-				if (!updateParityDegraded(disk, row, (const uint8_t *)data + (secD * SECTOR_SIZE))) // todo: fix wrong handling?
-					return false;
+			int parityDisk = getParityDevByRow(row);
+			const uint8_t *currentData = (const uint8_t *)data + (secD * SECTOR_SIZE);
+
+			if (m_RAIDStatus == RAID_OK) {
+				if (writeRAID_OK(disk, row, parityDisk, currentData))
+					continue;
 			}
+			if (m_RAIDStatus == RAID_DEGRADED) {
+				// multiple ways to do this
+				if (!m_overhead.m_status.getStatus(disk)) {
+					// disk is failed
+					// only update parity
+					uint8_t newParity[SECTOR_SIZE];
+					if (calculateParity(newParity, row, parityDisk, disk, currentData) && writeSector(parityDisk, row, newParity))
+						continue;
+
+				} else if (!m_overhead.m_status.getStatus(parityDisk)) {
+					// parity is failed
+					if (writeSector(disk, row, currentData))
+						continue;
+				} else {
+					// both ok
+					if (writeRAID_OK(disk, row, parityDisk, currentData))
+						continue;
+				}
+			}
+			// m_RAIDSTATUS == RAID_FAILED
+			return false;
 		}
 		return true;
 	}
