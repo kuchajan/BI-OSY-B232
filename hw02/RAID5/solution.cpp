@@ -41,7 +41,7 @@ public:
 		if (bit)
 			m_status |= (0b1 << dev);
 		else
-			m_status &= !(0b1 << dev);
+			m_status &= (0b1 << dev) ^ 0xffff;
 	}
 	bool operator==(const CStatus &other) const {
 		return m_status == other.m_status;
