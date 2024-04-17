@@ -84,7 +84,7 @@ protected:
 	bool readSector(int dev, int row, uint8_t *buf, int length = 1) {
 		if (!m_overhead.m_status.getStatus(dev))
 			return false;
-		bool toRet = m_dev.m_Read(dev, row, buf, length) == length * SECTOR_SIZE;
+		bool toRet = m_dev.m_Read(dev, row, buf, length) == length;
 		m_overhead.m_status.setStatus(dev, toRet);
 		return toRet;
 	}
@@ -95,7 +95,7 @@ protected:
 	bool writeSector(int dev, int row, const uint8_t *buf, int length = 1) {
 		if (!m_overhead.m_status.getStatus(dev))
 			return false;
-		bool toRet = m_dev.m_Write(dev, row, buf, length) == length * SECTOR_SIZE;
+		bool toRet = m_dev.m_Write(dev, row, buf, length) == length;
 		m_overhead.m_status.setStatus(dev, toRet);
 		return toRet;
 	}
