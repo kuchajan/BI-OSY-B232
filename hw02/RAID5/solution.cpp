@@ -337,19 +337,18 @@ public:
 		if (toRecover == -1)
 			throw logic_error("RAID says degraded, but all disks are ok, which is not possible");
 
+		m_overhead.m_status.setStatus(toRecover, true);
 		for (int row = 0; row < m_dev.m_Sectors - 1; ++row) {
 			uint8_t buf[SECTOR_SIZE];
 			if (!calculateParity(buf, row, toRecover)) {
-				// calculateParity already uses markFailDisk
+				// since we couldn't calculate the parity (other disk failed), then we can't resync anymore
+				markFailDisk(toRecover);
 				return RAID_FAILED;
 			}
-			if (!writeSector(toRecover, row, buf)) {
-				markFailDisk(toRecover);
+			if (!writeSector(toRecover, row, buf))
 				return RAID_DEGRADED;
-			}
 		}
 
-		m_overhead.m_status.setStatus(toRecover, true);
 		m_RAIDStatus = RAID_OK;
 		return RAID_OK;
 	}
