@@ -1,11 +1,11 @@
 #ifndef __PROGTEST__
-#include <cassert>
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <stdexcept>
+#include <cassert>	 // used in testing only
+#include <cmath>	 // unused
+#include <cstdint>	 // used in solution
+#include <cstdio>	 // used in tester only
+#include <cstdlib>	 // unused
+#include <cstring>	 // used in testing only, wanted to use memcpy
+#include <stdexcept> // used only outside progtest, cross includes cstdio
 using namespace std;
 
 constexpr int SECTOR_SIZE = 512;
@@ -70,6 +70,14 @@ void XORSector(uint8_t *sec1, const uint8_t *sec2) {
 		sec1[i] ^= sec2[i];
 }
 
+// maybe cstring is not included?
+void mymemcpy(void *dst, const void *src, int n) {
+	uint8_t *cdst = (uint8_t *)dst;
+	uint8_t *csrc = (uint8_t *)src;
+	for (int b = 0; b < n; ++b)
+		cdst[b] = csrc[b];
+}
+
 class CRaidVolume {
 protected:
 	TBlkDev m_dev;
@@ -131,12 +139,12 @@ protected:
 		bool result = readSector(dev, m_dev.m_Sectors - 1, buf);
 		if (!result)
 			return false;
-		memcpy(&overhead, buf, sizeof(SOverhead));
+		mymemcpy(&overhead, buf, sizeof(SOverhead));
 		return true;
 	}
 	bool setOverhead(int dev) {
 		uint8_t buf[SECTOR_SIZE];
-		memcpy(buf, &m_overhead, sizeof(SOverhead));
+		mymemcpy(buf, &m_overhead, sizeof(SOverhead));
 		return writeSector(dev, m_dev.m_Sectors - 1, buf);
 	}
 
@@ -148,7 +156,7 @@ protected:
 		uint8_t tmpBuf[SECTOR_SIZE];
 		bool first = failData == nullptr;
 		if (!first)
-			memcpy(buf, failData, SECTOR_SIZE);
+			mymemcpy(buf, failData, SECTOR_SIZE);
 		for (int disk = 0; disk < m_dev.m_Devices; ++disk) {
 			if (disk == skipDevDest || disk == skipDevFail)
 				continue;
@@ -198,7 +206,7 @@ public:
 		uint8_t buf[SECTOR_SIZE];
 		{
 			SOverhead overhead(1, dev.m_Devices);
-			memcpy(buf, &overhead, sizeof(SOverhead));
+			mymemcpy(buf, &overhead, sizeof(SOverhead));
 		}
 
 		bool err = false;
