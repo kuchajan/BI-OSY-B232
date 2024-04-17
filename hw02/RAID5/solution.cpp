@@ -85,7 +85,8 @@ protected:
 		if (!m_overhead.m_status.getStatus(dev))
 			return false;
 		bool toRet = m_dev.m_Read(dev, row, buf, length) == length;
-		m_overhead.m_status.setStatus(dev, toRet);
+		if (!toRet)
+			markFailDisk(dev);
 		return toRet;
 	}
 	/**
@@ -96,7 +97,8 @@ protected:
 		if (!m_overhead.m_status.getStatus(dev))
 			return false;
 		bool toRet = m_dev.m_Write(dev, row, buf, length) == length;
-		m_overhead.m_status.setStatus(dev, toRet);
+		if (!toRet)
+			markFailDisk(dev);
 		return toRet;
 	}
 
