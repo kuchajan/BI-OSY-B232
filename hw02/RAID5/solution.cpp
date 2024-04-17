@@ -143,7 +143,7 @@ protected:
 	bool calculateParity(uint8_t *buf, int row, int skipDevDest = -1, int skipDevFail = -1, const uint8_t *failData = nullptr) {
 		if (skipDevDest == -1)
 			skipDevDest = getParityDevByRow(row);
-		if ((m_RAIDStatus == RAID_DEGRADED && m_overhead.m_status.getStatus(skipDevDest) == true) || (m_RAIDStatus == RAID_FAILED))
+		if (m_RAIDStatus == RAID_FAILED)
 			return false;
 		uint8_t tmpBuf[SECTOR_SIZE];
 		bool first = failData == nullptr;
