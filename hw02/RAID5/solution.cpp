@@ -375,18 +375,21 @@ public:
 		for (int secD = 0; secD < secCnt; ++secD) {
 			int disk = getDevice(secNr + secD);
 			int row = getRow(secNr + secD);
-			if (m_overhead.m_status.getStatus(disk)) {
-				// device is readable, read data directly
-				if (!readSector(disk, row, (uint8_t *)data + (secD * SECTOR_SIZE))) {
-					// device failed now
-					markFailDisk(disk);
-					if (m_RAIDStatus == RAID_FAILED || !calculateParity((uint8_t *)data + (secD * SECTOR_SIZE), row, disk)) // inverse op of xor is xor, recover data that way
-						return false;
-				}
-			} else {
-				if (!calculateParity((uint8_t *)data + (secD * SECTOR_SIZE), row, disk)) // attempt data recovery
-					return false;
+			// int parityDisk = getParityDevByRow(row);
+			uint8_t *currentData = (uint8_t *)data + (secD * SECTOR_SIZE);
+
+			if (m_RAIDStatus == RAID_OK) {
+				if (readSector(disk, row, currentData))
+					continue;
 			}
+			if (m_RAIDStatus == RAID_DEGRADED) {
+				if (m_overhead.m_status.getStatus(disk) && readSector(disk, row, currentData))
+					continue;
+				else if (calculateParity(currentData, row, disk)) // inverse of xor is xor, recover data that way
+					continue;
+			}
+			// m_RAIDStatus == RAID_FAILED
+			return false;
 		}
 		return true;
 	}
