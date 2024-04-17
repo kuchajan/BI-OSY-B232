@@ -65,6 +65,11 @@ struct SOverhead {
 	}
 };
 
+void XORSector(uint8_t *sec1, const uint8_t *sec2) {
+	for (int i = 0; i < SECTOR_SIZE; ++i)
+		sec1[i] ^= sec2[i];
+}
+
 class CRaidVolume {
 protected:
 	TBlkDev m_dev;
@@ -156,8 +161,7 @@ protected:
 					markFailDisk(disk);
 					return false;
 				}
-				for (int byte = 0; byte < SECTOR_SIZE; ++byte)
-					buf[byte] ^= tmpBuf[byte];
+				XORSector(buf, tmpBuf);
 			}
 		}
 		return true;
