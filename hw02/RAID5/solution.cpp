@@ -317,8 +317,13 @@ public:
 				toRecover = disk;
 				break;
 			}
-		if (toRecover == -1)
+		if (toRecover == -1) {
+#ifndef __PROGTEST__
 			throw logic_error("RAID says degraded, but all disks are ok, which is not possible");
+#else
+			return m_RAIDStatus;
+#endif
+		}
 
 		m_overhead.m_status.setStatus(toRecover, true);
 		for (int row = 0; row < m_dev.m_Sectors - 1; ++row) {
