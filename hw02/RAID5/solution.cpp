@@ -542,7 +542,35 @@ TBlkDev openDisks() {
 	return res;
 }
 //-------------------------------------------------------------------------------------------------
-void test1() {
+
+class CCFileWrap {
+private:
+	FILE *m_data;
+
+public:
+	CCFileWrap(const char *path, const char *mode) : m_data(fopen(path, mode)) {}
+	~CCFileWrap() {
+		fclose(m_data);
+	}
+	FILE *get() {
+		return m_data;
+	}
+};
+
+constexpr int RAND_SEC_CNT = 4 * 4;
+constexpr int BIG_BUF_SIZE = 4 * SECTOR_SIZE;
+
+void generateRandom() {
+	CCFileWrap testFile("./random.bin", "r+b");
+	CCFileWrap random("/dev/random", "r+b"); //! platform dependent - suck it non-linux users
+	uint8_t buf[SECTOR_SIZE];
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		assert(fread(buf, SECTOR_SIZE, 1, random.get()) == 1);
+		assert(fwrite(buf, SECTOR_SIZE, 1, testFile.get()) == 1);
+	}
+}
+
+void testNormal() {
 	/* create the disks before we use them
 	 */
 	TBlkDev dev = createDisks();
@@ -574,6 +602,38 @@ void test1() {
 
 	/* Extensive testing of your RAID implementation ...
 	 */
+	generateRandom();
+	CCFileWrap testFile("./random.bin", "r+b");
+
+	// write random data into RAID device
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		uint8_t buf[SECTOR_SIZE];
+		assert(fread(buf, SECTOR_SIZE, 1, testFile.get()) == 1);
+		assert(vol.write(i, buf, 1));
+	}
+
+	// check that we can recover same random data
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		uint8_t buf1[SECTOR_SIZE];
+		uint8_t buf2[SECTOR_SIZE];
+		assert(fread(buf1, SECTOR_SIZE, 1, testFile.get()) == 1);
+		assert(vol.read(i, buf2, 1));
+		for (int j = 0; j < SECTOR_SIZE; ++j)
+			assert(buf1[j] == buf2[j]);
+	}
+
+	// read multiple segments at a time
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT / 4; ++i) {
+		uint8_t buf1[BIG_BUF_SIZE];
+		uint8_t buf2[BIG_BUF_SIZE];
+		assert(fread(buf1, SECTOR_SIZE, 4, testFile.get()) == 4);
+		assert(vol.read(i * 4, buf2, 4));
+		for (int j = 0; j < BIG_BUF_SIZE; ++j)
+			assert(buf1[j] == buf2[j]);
+	}
 
 	/* Stop the raid device ...
 	 */
@@ -586,7 +646,7 @@ void test1() {
 	doneDisks();
 }
 //-------------------------------------------------------------------------------------------------
-void test2() {
+void testRestart() {
 	/* The RAID as well as disks are stopped. It corresponds i.e. to the
 	 * restart of a real computer.
 	 *
@@ -596,19 +656,93 @@ void test2() {
 
 	TBlkDev dev = openDisks();
 	CRaidVolume vol;
+	CCFileWrap testFile("./random.bin", "r+b");
 
 	assert(vol.start(dev) == RAID_OK);
 
-	/* some I/O: RaidRead/RaidWrite
-	 */
+	// check that we can recover same random data
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		uint8_t buf1[SECTOR_SIZE];
+		uint8_t buf2[SECTOR_SIZE];
+		assert(fread(buf1, SECTOR_SIZE, 1, testFile.get()) == 1);
+		assert(vol.read(i, buf2, 1));
+		for (int j = 0; j < SECTOR_SIZE; ++j)
+			assert(buf1[j] == buf2[j]);
+	}
+
+	vol.stop();
+	doneDisks();
+}
+
+void testDegradeAndResync() {
+	TBlkDev dev = openDisks();
+	CRaidVolume vol;
+	CCFileWrap testFile("./random.bin", "r+b");
+
+	assert(vol.start(dev) == RAID_OK);
+
+	// simulate disk fail
+	FILE *failed = g_Fp[0];
+	g_Fp[0] = nullptr;
+
+	// check that we can still recover same random data
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		uint8_t buf1[SECTOR_SIZE];
+		uint8_t buf2[SECTOR_SIZE];
+		assert(fread(buf1, SECTOR_SIZE, 1, testFile.get()) == 1);
+		assert(vol.read(i, buf2, 1));
+		for (int j = 0; j < SECTOR_SIZE; ++j)
+			assert(buf1[j] == buf2[j]);
+	}
+
+	assert(vol.status() == RAID_DEGRADED);
+
+	generateRandom();
+
+	// write random data into RAID device
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		uint8_t buf[SECTOR_SIZE];
+		assert(fread(buf, SECTOR_SIZE, 1, testFile.get()) == 1);
+		assert(vol.write(i, buf, 1));
+	}
+
+	// check that we can recover same random data
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		uint8_t buf1[SECTOR_SIZE];
+		uint8_t buf2[SECTOR_SIZE];
+		assert(fread(buf1, SECTOR_SIZE, 1, testFile.get()) == 1);
+		assert(vol.read(i, buf2, 1));
+		for (int j = 0; j < SECTOR_SIZE; ++j)
+			assert(buf1[j] == buf2[j]);
+	}
+
+	// simulate disk recovery
+	g_Fp[0] = failed;
+	assert(vol.resync() == RAID_OK);
+
+	// check that we can recover same random data
+	fseek(testFile.get(), 0, SEEK_SET);
+	for (int i = 0; i < RAND_SEC_CNT; ++i) {
+		uint8_t buf1[SECTOR_SIZE];
+		uint8_t buf2[SECTOR_SIZE];
+		assert(fread(buf1, SECTOR_SIZE, 1, testFile.get()) == 1);
+		assert(vol.read(i, buf2, 1));
+		for (int j = 0; j < SECTOR_SIZE; ++j)
+			assert(buf1[j] == buf2[j]);
+	}
 
 	vol.stop();
 	doneDisks();
 }
 //-------------------------------------------------------------------------------------------------
 int main() {
-	test1();
-	test2();
+	testNormal();
+	testRestart();
+	testDegradeAndResync();
 	return EXIT_SUCCESS;
 }
 #endif /* __PROGTEST__ */
